@@ -1,0 +1,152 @@
+@host = http://localhost:5135
+
+### 1. Criar cliente — NIF e nome são normalizados (trim, sem pontos/espaços/hífenes)
+# Devolve 201 com Location, Id e Version (Base64 do rowversion). Guarde o id e a version.
+POST {{host}}/api/partners
+Content-Type: application/json
+
+{
+  "name": " Ana Silva ",
+  "taxNumber": "001.234.567",
+  "type": "CUSTOMER",
+  "email": " ana@example.com ",
+  "creditLimit": 250.75
+}
+
+### 2. Criar com o mesmo NIF noutro formato — devolve 409 DUPLICATE_TAX_NUMBER
+POST {{host}}/api/partners
+Content-Type: application/json
+
+{
+  "name": "Outro Nome",
+  "taxNumber": "001 234 567",
+  "type": "SUPPLIER",
+  "email": null,
+  "creditLimit": 0
+}
+
+### 3. Entidade BOTH
+POST {{host}}/api/partners
+Content-Type: application/json
+
+{
+  "name": "Distribuidora Global",
+  "taxNumber": "002-345-678",
+  "type": "BOTH",
+  "email": "geral@dg.example.com",
+  "creditLimit": 10000
+}
+
+### 4. CreditLimit com 3 casas decimais — devolve 400 (precisão excessiva é rejeitada, não arredondada)
+POST {{host}}/api/partners
+Content-Type: application/json
+
+{
+  "name": "Precision Rejected",
+  "taxNumber": "003456789",
+  "type": "CUSTOMER",
+  "email": null,
+  "creditLimit": 10.999
+}
+
+### 5. NIF com letras — devolve 400
+POST {{host}}/api/partners
+Content-Type: application/json
+
+{
+  "name": "Invalid Nif",
+  "taxNumber": "12A456789",
+  "type": "CUSTOMER",
+  "email": null,
+  "creditLimit": 1
+}
+
+### 6. Listagem paginada (só ativos por defeito, ordenada por Name depois Id)
+GET {{host}}/api/partners?page=1&pageSize=20
+
+### 7. Listagem incluindo inativos
+GET {{host}}/api/partners?includeInactive=true&pageSize=100
+
+### 8. Pesquisa por nome (parcial, case-insensitive) ou NIF
+GET {{host}}/api/partners?search=ana
+
+### 9. Pesquisa por NIF parcial com separadores (normaliza "009.87" -> "00987")
+GET {{host}}/api/partners?search=009.87
+
+### 10. Filtro por tipo: CUSTOMER inclui CUSTOMER e BOTH
+GET {{host}}/api/partners?type=CUSTOMER
+
+### 11. Filtros combinados (AND)
+GET {{host}}/api/partners?type=BOTH&search=distribuidora&page=1&pageSize=10
+
+### 12. Página além dos resultados — Items vazio, TotalCount correto
+GET {{host}}/api/partners?page=99
+
+### 13. Parâmetros inválidos — devolvem 400 sem alterar a base de dados
+GET {{host}}/api/partners?page=0
+
+###
+GET {{host}}/api/partners?pageSize=101
+
+###
+GET {{host}}/api/partners?type=PARTNER
+
+### 14. Obter por Id (substitua {id}) — funciona também para entidades inativas; Id inexistente dá 404
+GET {{host}}/api/partners/11111111-1111-1111-1111-111111111111
+
+### 15. Atualizar — Version obrigatória (copie do GET/POST anterior). Devolve 200 com nova Version.
+# PUT exige name, taxNumber, type, creditLimit, isActive e version; email pode ser null.
+PUT {{host}}/api/partners/11111111-1111-1111-1111-111111111111
+Content-Type: application/json
+
+{
+  "name": "Maria Santos Atualizada",
+  "taxNumber": "009876543",
+  "type": "CUSTOMER",
+  "email": "novo@example.com",
+  "creditLimit": 1800.00,
+  "isActive": true,
+  "version": "COPIE_A_VERSION_DO_GET"
+}
+
+### 16. Reenviar a mesma (antiga) Version — devolve 409 VERSION_CONFLICT, sem sobrescrever dados
+PUT {{host}}/api/partners/11111111-1111-1111-1111-111111111111
+Content-Type: application/json
+
+{
+  "name": "Escrita Perdida",
+  "taxNumber": "009876543",
+  "type": "CUSTOMER",
+  "email": null,
+  "creditLimit": 1,
+  "isActive": true,
+  "version": "COPIE_A_VERSION_ANTIGA"
+}
+
+### 17. Mudar o NIF para um já usado por outra entidade — 409, registo fica intacto
+PUT {{host}}/api/partners/22222222-2222-2222-2222-222222222222
+Content-Type: application/json
+
+{
+  "name": "Joao Pereira",
+  "taxNumber": "009876543",
+  "type": "SUPPLIER",
+  "email": null,
+  "creditLimit": 20000,
+  "isActive": true,
+  "version": "COPIE_A_VERSION_DO_GET"
+}
+
+### 18. Desativar (mantendo dados e version atual) — sai da listagem por defeito
+PUT {{host}}/api/partners/22222222-2222-2222-2222-222222222222
+Content-Type: application/json
+
+{
+  "name": "Joao Pereira",
+  "taxNumber": "002345678",
+  "type": "SUPPLIER",
+  "email": "joao.pereira@example.com",
+  "creditLimit": 20000,
+  "isActive": false,
+  "version": "COPIE_A_VERSION_DO_GET"
+}
